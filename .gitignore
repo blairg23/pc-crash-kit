@@ -1,0 +1,43 @@
+cat > .gitignore <<'EOF'
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+*.egg-info/
+.dist-info/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Envs
+.venv/
+venv/
+
+# Builds
+build/
+dist/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Project outputs
+out/
+*.log
+
+# Crash dumps / reports
+*.dmp
+*.hdmp
+*.wer
+WER/
+LiveKernelReports/
+Minidump/
+EOF
+
+# Custom
+artifacts/
