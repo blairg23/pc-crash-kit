@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "pc-crash-kit"
+version = "0.1.0"
+description = "Collect and analyze Windows crash artifacts (event logs, dumps, WER) for troubleshooting."
+authors = ["BlairG <blairg23@gmail.com>"]
+readme = "README.md"
+packages = [{ include = "pc_crash_kit", from = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.4"
+
+[tool.poetry.scripts]
+pc-crash-kit = "pc_crash_kit.cli:main"
+
+[build-system]
+requires = ["poetry-core>=1.8.0"]
+build-backend = "poetry.core.masonry.api"
