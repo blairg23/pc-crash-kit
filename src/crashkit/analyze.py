@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Any, Iterable, List, Optional, Tuple
 
 TIME_KEYS = ("TimeCreated", "TimeGenerated")
+_FMT_SAMPLE = datetime(2000, 1, 1, 1, 1, 1, 123456)
+_FMT_LEN_CACHE: dict[str, int] = {}
 
 @dataclass
 class Event:
@@ -27,15 +29,48 @@ def _parse_dt(s: Any) -> Optional[datetime]:
     if isinstance(s, datetime):
         return s
     if isinstance(s, str):
+        text = s.strip()
+        if not text:
+            return None
+
+        def _fmt_len(fmt: str) -> int:
+            cached = _FMT_LEN_CACHE.get(fmt)
+            if cached is None:
+                cached = len(_FMT_SAMPLE.strftime(fmt))
+                _FMT_LEN_CACHE[fmt] = cached
+            return cached
+
+        def _strip_tz(value: str) -> str:
+            return re.sub(r"(Z|[+-]\d{2}:?\d{2})$", "", value)
+
+        candidates = [text]
+        stripped = _strip_tz(text)
+        if stripped != text:
+            candidates.append(stripped)
+
+        formats = (
+            "%Y-%m-%dT%H:%M:%S.%f",
+            "%Y-%m-%dT%H:%M:%S",
+            "%m/%d/%Y %I:%M:%S %p",
+            "%Y-%m-%d %H:%M:%S",
+        )
+
         # Handle typical Windows formats seen in exports
-        for fmt in ("%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S", "%m/%d/%Y %I:%M:%S %p", "%Y-%m-%d %H:%M:%S"):
-            try:
-                return datetime.strptime(s[:len(fmt)], fmt)
-            except Exception:
-                pass
+        for cand in candidates:
+            for fmt in formats:
+                try:
+                    return datetime.strptime(cand, fmt)
+                except Exception:
+                    try:
+                        expect_len = _fmt_len(fmt)
+                        if len(cand) >= expect_len:
+                            return datetime.strptime(cand[:expect_len], fmt)
+                    except Exception:
+                        pass
+
         # Try ISO-ish
         try:
-            return datetime.fromisoformat(s.replace("Z", ""))
+            return datetime.fromisoformat(text.replace("Z", ""))
         except Exception:
             return None
     return None

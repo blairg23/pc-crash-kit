@@ -69,13 +69,13 @@ def find_latest_files(base: Path, latest_n: int) -> list[Path]:
     return ordered[-latest_n:]
 
 
-def find_latest_file_in_subdir(base: Path, subdir: str) -> list[Path]:
+def find_latest_file_in_subdir(base: Path, subdir: str, latest_n: int) -> list[Path]:
     folder = base / subdir
     if not folder.exists():
         return []
     files = [p for p in folder.iterdir() if p.is_file()]
     ordered = _sorted_by_mtime(files)
-    return ordered[-1:] if ordered else []
+    return ordered[-latest_n:] if ordered else []
 
 
 def export_event_logs(dest_dir: Path, hours: int) -> list[str]:
@@ -137,7 +137,7 @@ def collect(
         )
 
     for sub in LIVE_KERNEL_FOLDERS:
-        for f in find_latest_file_in_subdir(LIVE_KERNEL, sub):
+        for f in find_latest_file_in_subdir(LIVE_KERNEL, sub, latest_n):
             dest = live_dest / sub / f.name
             copy_file_with_limit(
                 f,

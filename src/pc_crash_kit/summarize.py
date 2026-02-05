@@ -168,6 +168,10 @@ def _collect_artifact_stats(bundle_dir: Path) -> dict[str, Any]:
 
 def summarize(bundle_dir: Path, output_dir: Path | None = None) -> dict[str, str]:
     bundle_dir = bundle_dir.resolve()
+    if not bundle_dir.exists():
+        raise FileNotFoundError(f"Bundle directory not found: {bundle_dir}")
+    if not bundle_dir.is_dir():
+        raise NotADirectoryError(f"Bundle path is not a directory: {bundle_dir}")
     if output_dir is None:
         output_dir = bundle_dir
     ensure_dir(output_dir)
