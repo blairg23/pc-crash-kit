@@ -22,6 +22,31 @@ def _run_and_save(output_dir: Path, name: str, cmd: list[str], filename: str) ->
     }
 
 
+def _run_system_info(output_dir: Path) -> dict:
+    script = Path(__file__).resolve().parents[2] / "scripts" / "system-info.ps1"
+    out_path = output_dir / "system_info.json"
+    cmd = [
+        "powershell.exe",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(script),
+        "-OutputPath",
+        str(out_path),
+    ]
+    result = run_cmd(cmd, capture=True, check=False)
+    if result.returncode != 0:
+        logger.warning("system-info.ps1 failed: %s", result.stderr.strip())
+    return {
+        "name": "system_info",
+        "cmd": cmd,
+        "returncode": result.returncode,
+        "output_file": str(out_path),
+        "stderr": (result.stderr or "").strip(),
+    }
+
+
 def doctor(
     output_dir: Path | None,
     run_sfc: bool = False,
@@ -45,35 +70,12 @@ def doctor(
 
     baseline_cmds = [
         ("systeminfo", ["systeminfo"], "systeminfo.txt"),
-        (
-            "wmic_os",
-            ["wmic", "os", "get", "Caption,Version,BuildNumber", "/format:list"],
-            "wmic_os.txt",
-        ),
-        (
-            "wmic_bios",
-            ["wmic", "bios", "get", "Manufacturer,SMBIOSBIOSVersion,ReleaseDate", "/format:list"],
-            "wmic_bios.txt",
-        ),
-        (
-            "wmic_cpu",
-            ["wmic", "cpu", "get", "Name,NumberOfCores,NumberOfLogicalProcessors", "/format:list"],
-            "wmic_cpu.txt",
-        ),
-        (
-            "wmic_computersystem",
-            ["wmic", "computersystem", "get", "Manufacturer,Model,TotalPhysicalMemory,HypervisorPresent", "/format:list"],
-            "wmic_computersystem.txt",
-        ),
-        (
-            "wmic_gpu",
-            ["wmic", "path", "Win32_VideoController", "get", "Name,DriverVersion", "/format:list"],
-            "wmic_gpu.txt",
-        ),
     ]
 
     for name, cmd, filename in baseline_cmds:
         result["commands"].append(_run_and_save(output_dir, name, cmd, filename))
+
+    result["commands"].append(_run_system_info(output_dir))
 
     if run_sfc:
         if result["is_admin"]:

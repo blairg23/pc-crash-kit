@@ -98,7 +98,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     summarize_p = sub.add_parser("summarize", help="Summarize a collected artifact bundle")
-    summarize_p.add_argument("bundle_dir", type=Path, help="Path to an artifacts/<timestamp> folder")
+    summarize_p.add_argument(
+        "bundle_dir",
+        type=Path,
+        nargs="?",
+        default=None,
+        help="Path to an artifacts/<timestamp> folder (default: latest under ./artifacts)",
+    )
     summarize_p.add_argument(
         "--output",
         type=Path,
@@ -183,6 +189,23 @@ def _with_admin_flags(argv: Sequence[str]) -> list[str]:
 
 def _windows_repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
+
+
+def _latest_bundle_dir(base: Path) -> Path | None:
+    if not base.exists() or not base.is_dir():
+        return None
+    candidates: list[Path] = []
+    for entry in base.iterdir():
+        if not entry.is_dir():
+            continue
+        try:
+            if (entry / "manifest.json").exists():
+                candidates.append(entry)
+        except OSError:
+            continue
+    if not candidates:
+        return None
+    return max(candidates, key=lambda p: p.stat().st_mtime)
 
 
 def _launch_elevated_windows(argv: Sequence[str]) -> int:
@@ -386,7 +409,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "summarize":
-        summary = summarize(args.bundle_dir, output_dir=args.output)
+        bundle_dir = args.bundle_dir
+        if bundle_dir is None:
+            bundle_dir = _latest_bundle_dir(Path("artifacts"))
+            if bundle_dir is None:
+                print(
+                    "No artifact bundle found under ./artifacts. "
+                    "Provide a bundle_dir or run collect first.",
+                    file=sys.stderr,
+                )
+                return 2
+        summary = summarize(bundle_dir, output_dir=args.output)
         print("Summary written")
         print(f"JSON: {summary['summary_json']}")
         print(f"Text: {summary['summary_txt']}")

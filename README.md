@@ -121,7 +121,12 @@ Override WER patterns (repeatable):
 poetry run pc-crash-kit collect --wer-pattern Kernel_193_* --wer-pattern Kernel_15e_* --require-admin --strict-access
 ```
 
-Summarize a collected bundle:
+Summarize the latest collected bundle (default):
+```powershell
+poetry run pc-crash-kit summarize
+```
+
+Summarize a specific bundle:
 ```powershell
 poetry run pc-crash-kit summarize artifacts\20250205-120000
 ```
@@ -135,7 +140,7 @@ poetry run pc-crash-kit doctor --run-sfc --dism-scan
 ## Notes
 - Full access requires admin. Use `--require-admin --strict-access` for fail-fast behavior.
 - Dumps larger than 1 GB are skipped by default. Skipped files are listed in `manifest.json` under `copy_report.skipped_large`.
-- Windows commands used: `wevtutil`, `wmic`, `systeminfo`, `sfc`, `DISM`.
+- Windows commands used: `wevtutil`, `systeminfo`, PowerShell `Get-CimInstance`, `sfc`, `DISM`.
 - `summarize` will parse `sysinfo.txt` and `memory.csv` if present in the bundle.
 
 ## PowerShell Helper

@@ -10,17 +10,10 @@ patterns = ["Kernel_193_*", "Kernel_15e_*", "Kernel_1a8_*"]
 folders = ["WATCHDOG", "NDIS", "USBXHCI", "USBHUB3", "PoW32kWatchdog"]
 
 [custom.arc_raiders]
-files = [
-  "C:\\Games\\ARC Raiders\\Saved\\Logs\\CrashReportClient.ini"
-]
 dirs = [
-  "C:\\Games\\ARC Raiders\\Saved\\Crashes",
-  "C:\\Games\\ARC Raiders\\Saved\\CrashReportClient",
-  "C:\\Games\\ARC Raiders\\Saved\\WindowsClient",
-  "C:\\Games\\ARC Raiders\\Saved\\Config"
+  "%LOCALAPPDATA%\\PioneerGame\\Saved\\Crashes",
+  "%LOCALAPPDATA%\\PioneerGame\\Saved\\Config"
 ]
 globs = [
-  "C:\\Games\\ARC Raiders\\Saved\\Crashes\\**\\*.dmp",
-  "C:\\Users\\Neophile\\AppData\\Local\\Temp\\**\\*.dmp",
-  "C:\\Users\\Neophile\\AppData\\Local\\PioneerGame\\Saved\\Crashes\\**\\*.*"
+  "%TEMP%\\**\\*.dmp"
 ]
