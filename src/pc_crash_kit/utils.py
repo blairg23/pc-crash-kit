@@ -7,6 +7,7 @@ import os
 import platform
 import shutil
 import subprocess
+import tomllib
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -188,3 +189,37 @@ def wsl_to_windows_path(path: Path) -> str:
         rest = raw[7:].replace("/", "\\")
         return f"{drive}:\\{rest}"
     return raw.replace("/", "\\")
+
+
+def load_config(config_path: Path | None = None) -> tuple[dict, Path | None]:
+    env_path = os.environ.get("PC_CRASH_KIT_CONFIG")
+    if config_path is None and env_path:
+        config_path = Path(env_path)
+
+    if config_path is None:
+        candidates: list[Path] = [Path.cwd() / "pc-crash-kit.toml"]
+        if is_windows():
+            appdata = os.environ.get("APPDATA")
+            local = os.environ.get("LOCALAPPDATA")
+            if appdata:
+                candidates.append(Path(appdata) / "pc-crash-kit" / "config.toml")
+            if local:
+                candidates.append(Path(local) / "pc-crash-kit" / "config.toml")
+        else:
+            candidates.append(Path.home() / ".config" / "pc-crash-kit" / "config.toml")
+
+        for path in candidates:
+            if path.exists():
+                config_path = path
+                break
+
+    if config_path is None or not config_path.exists():
+        return {}, None
+
+    try:
+        raw = config_path.read_bytes()
+        data = tomllib.loads(raw.decode("utf-8"))
+        return data, config_path
+    except Exception as exc:
+        logger.warning("Failed to load config %s: %s", config_path, exc)
+        return {}, None

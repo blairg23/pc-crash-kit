@@ -81,6 +81,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Print a machine-readable JSON summary to stdout",
     )
     collect_p.add_argument(
+        "--config",
+        type=Path,
+        default=None,
+        help="Path to pc-crash-kit.toml (default: auto-detect)",
+    )
+    collect_p.add_argument(
         "--wer-pattern",
         action="append",
         default=None,
@@ -137,7 +143,7 @@ def _ps_quote(value: str) -> str:
 
 def _convert_wsl_args(argv: Sequence[str]) -> list[str]:
     converted: list[str] = []
-    path_opts = {"--output"}
+    path_opts = {"--output", "--config"}
 
     i = 0
     while i < len(argv):
@@ -330,6 +336,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 latest_minidump=args.latest_minidump,
                 require_admin=args.require_admin,
                 strict_access=args.strict_access,
+                config_path=args.config,
             )
         except PermissionError as exc:
             print(str(exc), file=sys.stderr)

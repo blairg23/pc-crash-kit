@@ -51,6 +51,39 @@ If you still want to verify the location manually:
 Get-ChildItem -Path "$env:APPDATA","$env:LOCALAPPDATA" -Filter "poetry.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
 ```
 
+## Config File (Custom Paths)
+Create `pc-crash-kit.toml` in the repo root to override default locations and include custom game dumps.
+
+Example:
+```toml
+[paths]
+wer_queue = "C:\\ProgramData\\Microsoft\\Windows\\WER\\ReportQueue"
+livekernel_reports = "C:\\Windows\\LiveKernelReports"
+minidump = "C:\\Windows\\Minidump"
+
+[wer]
+patterns = ["Kernel_193_*", "Kernel_15e_*", "Kernel_1a8_*"]
+
+[livekernel]
+folders = ["WATCHDOG", "NDIS", "USBXHCI", "USBHUB3", "PoW32kWatchdog"]
+
+[custom]
+files = [
+  "C:\\Games\\ARC Raiders\\Saved\\Logs\\CrashReportClient.ini"
+]
+dirs = [
+  "C:\\Games\\ARC Raiders\\Saved\\Crashes"
+]
+globs = [
+  "C:\\Games\\ARC Raiders\\Saved\\Crashes\\**\\*.dmp"
+]
+```
+
+You can also point to a config file explicitly:
+```powershell
+poetry run pc-crash-kit collect --config C:\path\to\pc-crash-kit.toml --require-admin --strict-access
+```
+
 Collect more items and more logs:
 ```powershell
 poetry run pc-crash-kit collect --latest-n 5 --eventlog-hours 48 --require-admin --strict-access
