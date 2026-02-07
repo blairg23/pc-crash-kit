@@ -14,20 +14,28 @@ CLI choice: `argparse` keeps the runtime dependency set minimal and avoids extra
 1. `poetry install`
 
 ## Quick Start (Stupid Easy)
-1. Open **PowerShell** in the repo folder.
-2. Paste this (works even if Poetry is not installed):
+Use the same command everywhere once you add `scripts/` to PATH.
+
+### 1) One-Time Setup (adds `scripts/` to PATH)
+PowerShell:
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\pc-crash-kit.ps1 collect --require-admin --strict-access
+[Environment]::SetEnvironmentVariable("PATH", "D:\\Dropbox\\Projects\\sandboxes\\python\\pc-crash-kit\\scripts;" + [Environment]::GetEnvironmentVariable("PATH","User"), "User")
 ```
+
+WSL bash:
+```bash
+echo 'export PATH="/mnt/d/Dropbox/Projects/sandboxes/python/pc-crash-kit/scripts:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+### 2) Run (same command in any terminal)
+```bash
+pc-crash-kit collect --require-admin --strict-access
+```
+
 If you are not admin, you will get a UAC prompt and it will re-run elevated.
 
 If the tool prints a "Run this in PS" block, **copy/paste exactly what it prints** into PowerShell.
-If you are in WSL or bash, open PowerShell in the repo and use the same command.
-
-If Poetry is installed, this also works:
-```powershell
-poetry run pc-crash-kit collect --require-admin --strict-access
-```
 
 ## One-Command Full Run
 Collect, summarize, and doctor in one command:
@@ -53,6 +61,7 @@ Get-ChildItem -Path "$env:APPDATA","$env:LOCALAPPDATA" -Filter "poetry.exe" -Rec
 
 ## Config File (Custom Paths)
 Create `pc-crash-kit.toml` in the repo root to override default locations and include custom game dumps.
+Custom groups live under `[custom.<group_name>]` and are copied into `artifacts/custom/<group_name>/`.
 
 Example:
 ```toml
@@ -67,12 +76,15 @@ patterns = ["Kernel_193_*", "Kernel_15e_*", "Kernel_1a8_*"]
 [livekernel]
 folders = ["WATCHDOG", "NDIS", "USBXHCI", "USBHUB3", "PoW32kWatchdog"]
 
-[custom]
+[custom.arc_raiders]
 files = [
   "C:\\Games\\ARC Raiders\\Saved\\Logs\\CrashReportClient.ini"
 ]
 dirs = [
-  "C:\\Games\\ARC Raiders\\Saved\\Crashes"
+  "C:\\Games\\ARC Raiders\\Saved\\Crashes",
+  "C:\\Games\\ARC Raiders\\Saved\\CrashReportClient",
+  "C:\\Games\\ARC Raiders\\Saved\\WindowsClient",
+  "C:\\Games\\ARC Raiders\\Saved\\Config"
 ]
 globs = [
   "C:\\Games\\ARC Raiders\\Saved\\Crashes\\**\\*.dmp"
@@ -132,8 +144,6 @@ The helper script auto-elevates and uses Poetry if available, otherwise falls ba
 ```powershell
 .\scripts\pc-crash-kit.ps1 collect --require-admin --strict-access
 ```
-
-If you want it available globally, add the `scripts/` folder to your PATH or create a PowerShell profile alias.
 
 ## Sample summarize output
 

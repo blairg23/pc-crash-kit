@@ -312,6 +312,23 @@ def _print_admin_instructions(argv: Sequence[str]) -> None:
         print(win_cmd, file=sys.stderr)
 
 
+def _print_wsl_instructions(argv: Sequence[str]) -> None:
+    repo_root = _windows_repo_root()
+    win_repo = wsl_to_windows_path(repo_root)
+    helper = f"{win_repo}\\scripts\\pc-crash-kit.ps1"
+    args = " ".join(_with_admin_flags(argv))
+
+    print("WSL detected. Collection requires Windows admin privileges.", file=sys.stderr)
+    print("Run this in Windows PowerShell (Admin):", file=sys.stderr)
+    print(f"{helper} {args}", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("Or run this from WSL to open an elevated PowerShell:", file=sys.stderr)
+    print(
+        f"powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"{helper}\" {args}",
+        file=sys.stderr,
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     if argv is None:
         argv = list(sys.argv[1:])
@@ -321,8 +338,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     _configure_logging(args.verbose)
 
     if is_wsl():
-        if args.command == "collect" and (args.require_admin or args.strict_access):
-            return _launch_elevated_from_wsl(argv)
+        if args.command in {"collect", "doctor"}:
+            _print_wsl_instructions(argv)
+            return 2
         return _delegate_to_windows(argv)
 
     if args.command == "collect" and (args.require_admin or args.strict_access) and not is_admin():

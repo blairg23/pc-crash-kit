@@ -146,7 +146,7 @@ def _safe_relpath(path: Path) -> Path:
 
 
 def _copy_custom_paths(
-    output_dir: Path,
+    dest_root: Path,
     report: CopyReport,
     max_bytes: int,
     include_large_dumps: bool,
@@ -154,7 +154,7 @@ def _copy_custom_paths(
     dirs: list[str],
     globs: list[str],
 ) -> dict:
-    custom_root = ensure_dir(output_dir / "custom")
+    custom_root = ensure_dir(dest_root)
     matched: list[str] = []
 
     for raw in files:
@@ -186,27 +186,68 @@ def _copy_custom_paths(
     return {"files": files, "dirs": dirs, "globs": globs, "glob_matches": matched}
 
 
+def _copy_custom_groups(
+    output_dir: Path,
+    report: CopyReport,
+    max_bytes: int,
+    include_large_dumps: bool,
+    groups: dict,
+) -> dict:
+    if not groups:
+        return {}
+
+    summary: dict[str, dict] = {}
+    for name, spec in groups.items():
+        if not isinstance(spec, dict):
+            logger.warning("Custom group %s is not a table, skipping.", name)
+            continue
+        files = _normalize_list(spec.get("files"))
+        dirs = _normalize_list(spec.get("dirs"))
+        globs = _normalize_list(spec.get("globs"))
+        dest_root = ensure_dir(output_dir / "custom" / str(name))
+        summary[str(name)] = _copy_custom_paths(
+            dest_root,
+            report,
+            max_bytes=max_bytes,
+            include_large_dumps=include_large_dumps,
+            files=files,
+            dirs=dirs,
+            globs=globs,
+        )
+    return summary
+
+
 def export_event_logs(dest_dir: Path, hours: int) -> list[str]:
     ensure_dir(dest_dir)
-    outputs = []
+    outputs: list[str] = []
     if not is_windows():
         logger.warning("Not running on Windows, skipping event log export.")
         return outputs
 
-    query_ms = hours * 3600 * 1000
-    query = f"*[System[TimeCreated[timediff(@SystemTime) <= {query_ms}]]]"
-    logs = {
-        "System": dest_dir / "System.evtx",
-        "Application": dest_dir / "Application.evtx",
-    }
+    script = Path(__file__).resolve().parents[2] / "scripts" / "export-eventlogs.ps1"
+    cmd = [
+        "powershell.exe",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(script),
+        "-OutputDir",
+        str(dest_dir),
+        "-Hours",
+        str(hours),
+    ]
+    result = run_cmd(cmd, capture=True, check=False)
+    if result.returncode != 0:
+        logger.warning("Failed to export event logs: %s", result.stderr.strip())
+        return outputs
 
-    for log_name, out_path in logs.items():
-        cmd = ["wevtutil", "epl", log_name, str(out_path), f"/q:{query}"]
-        result = run_cmd(cmd, capture=True, check=False)
-        if result.returncode != 0:
-            logger.warning("Failed to export %s log: %s", log_name, result.stderr.strip())
-        else:
-            outputs.append(str(out_path))
+    system_path = dest_dir / "System.evtx"
+    app_path = dest_dir / "Application.evtx"
+    if system_path.exists():
+        outputs.append(str(system_path))
+    if app_path.exists():
+        outputs.append(str(app_path))
     return outputs
 
 
@@ -291,14 +332,15 @@ def collect(
         )
 
     cfg_custom = config.get("custom", {})
-    custom_report = _copy_custom_paths(
+    if not isinstance(cfg_custom, dict):
+        logger.warning("Config [custom] must be a table of groups.")
+        cfg_custom = {}
+    custom_report = _copy_custom_groups(
         output_dir,
         report,
         max_bytes=max_bytes,
         include_large_dumps=include_large_dumps,
-        files=_normalize_list(cfg_custom.get("files")),
-        dirs=_normalize_list(cfg_custom.get("dirs")),
-        globs=_normalize_list(cfg_custom.get("globs")),
+        groups=cfg_custom,
     )
 
     event_logs = export_event_logs(output_dir / "eventlogs", hours=hours)
