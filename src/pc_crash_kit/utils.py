@@ -7,6 +7,7 @@ import os
 import platform
 import shutil
 import subprocess
+import tomllib
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -17,6 +18,20 @@ logger = logging.getLogger(__name__)
 
 def is_windows() -> bool:
     return platform.system().lower() == "windows"
+
+
+def is_wsl() -> bool:
+    if is_windows():
+        return False
+    if platform.system().lower() != "linux":
+        return False
+    if os.environ.get("WSL_INTEROP") or os.environ.get("WSL_DISTRO_NAME"):
+        return True
+    try:
+        with open("/proc/version", "r", encoding="utf-8") as f:
+            return "microsoft" in f.read().lower()
+    except OSError:
+        return False
 
 
 def is_admin() -> bool:
@@ -151,3 +166,60 @@ def copy_dir_with_limit(
 
 def os_walk(path: Path) -> Iterable[tuple[str, list[str], list[str]]]:
     return os.walk(path, onerror=lambda err: logger.warning("walk error: %s", err))
+
+
+def wsl_to_windows_path(path: Path) -> str:
+    try:
+        result = subprocess.run(
+            ["wslpath", "-w", str(path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            converted = result.stdout.strip()
+            if converted:
+                return converted
+    except OSError:
+        pass
+
+    raw = str(path)
+    if raw.startswith("/mnt/") and len(raw) > 6:
+        drive = raw[5].upper()
+        rest = raw[7:].replace("/", "\\")
+        return f"{drive}:\\{rest}"
+    return raw.replace("/", "\\")
+
+
+def load_config(config_path: Path | None = None) -> tuple[dict, Path | None]:
+    env_path = os.environ.get("PC_CRASH_KIT_CONFIG")
+    if config_path is None and env_path:
+        config_path = Path(env_path)
+
+    if config_path is None:
+        candidates: list[Path] = [Path.cwd() / "pc-crash-kit.toml"]
+        if is_windows():
+            appdata = os.environ.get("APPDATA")
+            local = os.environ.get("LOCALAPPDATA")
+            if appdata:
+                candidates.append(Path(appdata) / "pc-crash-kit" / "config.toml")
+            if local:
+                candidates.append(Path(local) / "pc-crash-kit" / "config.toml")
+        else:
+            candidates.append(Path.home() / ".config" / "pc-crash-kit" / "config.toml")
+
+        for path in candidates:
+            if path.exists():
+                config_path = path
+                break
+
+    if config_path is None or not config_path.exists():
+        return {}, None
+
+    try:
+        raw = config_path.read_bytes()
+        data = tomllib.loads(raw.decode("utf-8"))
+        return data, config_path
+    except Exception as exc:
+        logger.warning("Failed to load config %s: %s", config_path, exc)
+        return {}, None
