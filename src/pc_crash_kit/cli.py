@@ -202,12 +202,16 @@ def _launch_elevated_windows(argv: Sequence[str]) -> int:
         f"-WorkingDirectory {_ps_quote(win_repo)} "
         f"-ArgumentList '-NoExit','-Command',{_ps_quote(ps)}"
     )
-    run_cmd(
+    result = run_cmd(
         ["powershell.exe", "-NoProfile", "-Command", start_cmd],
         capture=False,
         check=False,
     )
-    return 0
+    if result.returncode != 0:
+        print("Failed to launch elevated PowerShell.", file=sys.stderr)
+        return result.returncode
+    print("Elevated run started in a new window.", file=sys.stderr)
+    return 2
 
 
 def _launch_elevated_from_wsl(argv: Sequence[str]) -> int:
@@ -233,12 +237,16 @@ def _launch_elevated_from_wsl(argv: Sequence[str]) -> int:
         f"-WorkingDirectory {_ps_quote(win_repo)} "
         f"-ArgumentList '-NoExit','-Command',{_ps_quote(ps)}"
     )
-    run_cmd(
+    result = run_cmd(
         ["powershell.exe", "-NoProfile", "-Command", start_cmd],
         capture=False,
         check=False,
     )
-    return 0
+    if result.returncode != 0:
+        print("Failed to launch elevated PowerShell from WSL.", file=sys.stderr)
+        return result.returncode
+    print("Elevated run started in a new window.", file=sys.stderr)
+    return 2
 
 
 def _delegate_to_windows(argv: Sequence[str]) -> int:
