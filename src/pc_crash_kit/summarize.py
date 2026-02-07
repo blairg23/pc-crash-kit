@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 import logging
 import platform
@@ -62,6 +63,71 @@ def get_os_info() -> dict[str, str]:
         }
     items = _wmic(["os", "get", "Caption,Version,BuildNumber"])
     return items[0] if items else {}
+
+
+def _find_latest_named_file(base: Path, filename: str) -> Path | None:
+    matches = [
+        p for p in base.rglob("*") if p.is_file() and p.name.lower() == filename.lower()
+    ]
+    if not matches:
+        return None
+    return max(matches, key=lambda p: p.stat().st_mtime)
+
+
+def _parse_sysinfo_text(text: str) -> dict[str, Any]:
+    data: dict[str, Any] = {}
+    current_key: str | None = None
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        if ":" in line:
+            key, value = line.split(":", 1)
+            key = key.strip()
+            value = value.strip()
+            if not key:
+                continue
+            if key in data:
+                existing = data[key]
+                if isinstance(existing, list):
+                    existing.append(value)
+                else:
+                    data[key] = [existing, value]
+            else:
+                data[key] = value
+            current_key = key
+        elif current_key:
+            extra = line.strip()
+            if not extra:
+                continue
+            existing = data.get(current_key, "")
+            if isinstance(existing, list):
+                existing[-1] = f"{existing[-1]} {extra}".strip()
+            else:
+                data[current_key] = f"{existing} {extra}".strip()
+    return data
+
+
+def _load_sysinfo(bundle_dir: Path) -> dict[str, Any] | None:
+    path = _find_latest_named_file(bundle_dir, "sysinfo.txt")
+    if not path:
+        return None
+    text = _read_text_guess(path)
+    if not text:
+        return None
+    return {"path": str(path), "data": _parse_sysinfo_text(text)}
+
+
+def _load_memory_csv(bundle_dir: Path) -> dict[str, Any] | None:
+    path = _find_latest_named_file(bundle_dir, "memory.csv")
+    if not path:
+        return None
+    try:
+        with path.open("r", encoding="utf-8-sig", newline="") as f:
+            reader = csv.DictReader(f)
+            rows = [row for row in reader]
+        return {"path": str(path), "rows": rows}
+    except Exception:
+        return None
 
 
 def parse_wer_report(path: Path) -> dict[str, Any]:
@@ -208,6 +274,8 @@ def summarize(bundle_dir: Path, output_dir: Path | None = None) -> dict[str, str
         "reports": reports,
         "gpu": get_gpu_info(),
         "os": get_os_info(),
+        "sysinfo": _load_sysinfo(bundle_dir),
+        "memory_csv": _load_memory_csv(bundle_dir),
         "manifest": manifest,
     }
 
@@ -246,6 +314,19 @@ def summarize(bundle_dir: Path, output_dir: Path | None = None) -> dict[str, str
         lines.append("OS:")
         for k, v in summary["os"].items():
             lines.append(f"- {k}: {v}")
+
+    if summary.get("sysinfo"):
+        info = summary["sysinfo"]["data"]
+        lines.append("")
+        lines.append("Sysinfo:")
+        for key in ("OS Name", "System Manufacturer", "System Model", "System Type"):
+            if key in info:
+                lines.append(f"- {key}: {info[key]}")
+
+    if summary.get("memory_csv"):
+        rows = summary["memory_csv"].get("rows", [])
+        lines.append("")
+        lines.append(f"Memory CSV rows: {len(rows)}")
 
     summary_txt_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 

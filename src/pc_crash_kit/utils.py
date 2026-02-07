@@ -19,6 +19,20 @@ def is_windows() -> bool:
     return platform.system().lower() == "windows"
 
 
+def is_wsl() -> bool:
+    if is_windows():
+        return False
+    if platform.system().lower() != "linux":
+        return False
+    if os.environ.get("WSL_INTEROP") or os.environ.get("WSL_DISTRO_NAME"):
+        return True
+    try:
+        with open("/proc/version", "r", encoding="utf-8") as f:
+            return "microsoft" in f.read().lower()
+    except OSError:
+        return False
+
+
 def is_admin() -> bool:
     if not is_windows():
         return False
@@ -151,3 +165,26 @@ def copy_dir_with_limit(
 
 def os_walk(path: Path) -> Iterable[tuple[str, list[str], list[str]]]:
     return os.walk(path, onerror=lambda err: logger.warning("walk error: %s", err))
+
+
+def wsl_to_windows_path(path: Path) -> str:
+    try:
+        result = subprocess.run(
+            ["wslpath", "-w", str(path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            converted = result.stdout.strip()
+            if converted:
+                return converted
+    except OSError:
+        pass
+
+    raw = str(path)
+    if raw.startswith("/mnt/") and len(raw) > 6:
+        drive = raw[5].upper()
+        rest = raw[7:].replace("/", "\\")
+        return f"{drive}:\\{rest}"
+    return raw.replace("/", "\\")

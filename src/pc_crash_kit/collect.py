@@ -51,29 +51,70 @@ def _sorted_by_mtime(paths: Iterable[Path]) -> list[Path]:
     return sorted(paths, key=_mtime)
 
 
-def find_latest_dirs(base: Path, patterns: list[str], latest_n: int) -> list[Path]:
-    if not base.exists():
+def find_latest_dirs(
+    base: Path, patterns: list[str], latest_n: int, strict_access: bool = False
+) -> list[Path]:
+    try:
+        if not base.exists():
+            return []
+    except OSError as exc:
+        if strict_access:
+            raise
+        logger.warning("Unable to access %s: %s", base, exc)
         return []
     matches: list[Path] = []
     for pat in patterns:
-        matches.extend([p for p in base.glob(pat) if p.is_dir()])
+        try:
+            matches.extend([p for p in base.glob(pat) if p.is_dir()])
+        except OSError as exc:
+            if strict_access:
+                raise
+            logger.warning("Unable to glob %s in %s: %s", pat, base, exc)
     ordered = _sorted_by_mtime(matches)
     return ordered[-latest_n:]
 
 
-def find_latest_files(base: Path, latest_n: int) -> list[Path]:
-    if not base.exists():
+def find_latest_files(
+    base: Path, latest_n: int, strict_access: bool = False
+) -> list[Path]:
+    try:
+        if not base.exists():
+            return []
+    except OSError as exc:
+        if strict_access:
+            raise
+        logger.warning("Unable to access %s: %s", base, exc)
         return []
-    files = [p for p in base.iterdir() if p.is_file()]
+    try:
+        files = [p for p in base.iterdir() if p.is_file()]
+    except OSError as exc:
+        if strict_access:
+            raise
+        logger.warning("Unable to list files in %s: %s", base, exc)
+        return []
     ordered = _sorted_by_mtime(files)
     return ordered[-latest_n:]
 
 
-def find_latest_file_in_subdir(base: Path, subdir: str, latest_n: int) -> list[Path]:
+def find_latest_file_in_subdir(
+    base: Path, subdir: str, latest_n: int, strict_access: bool = False
+) -> list[Path]:
     folder = base / subdir
-    if not folder.exists():
+    try:
+        if not folder.exists():
+            return []
+    except OSError as exc:
+        if strict_access:
+            raise
+        logger.warning("Unable to access %s: %s", folder, exc)
         return []
-    files = [p for p in folder.iterdir() if p.is_file()]
+    try:
+        files = [p for p in folder.iterdir() if p.is_file()]
+    except OSError as exc:
+        if strict_access:
+            raise
+        logger.warning("Unable to list files in %s: %s", folder, exc)
+        return []
     ordered = _sorted_by_mtime(files)
     return ordered[-latest_n:] if ordered else []
 
@@ -109,10 +150,17 @@ def collect(
     include_large_dumps: bool = False,
     max_dump_gb: int = DEFAULT_MAX_DUMP_GB,
     wer_patterns: list[str] | None = None,
+    latest_livekernel: int | None = None,
+    latest_minidump: int | None = None,
+    require_admin: bool = False,
+    strict_access: bool = False,
 ) -> dict:
     if output_dir is None:
         output_dir = Path("artifacts") / timestamp_now()
     ensure_dir(output_dir)
+
+    if require_admin and not is_admin():
+        raise PermissionError("Admin privileges required. Re-run in an elevated shell.")
 
     if not is_admin():
         logger.warning("Not running as admin; some files or logs may be inaccessible.")
@@ -125,8 +173,13 @@ def collect(
     live_dest = ensure_dir(output_dir / "livekernelreports")
     mini_dest = ensure_dir(output_dir / "minidump")
 
+    live_n = latest_livekernel if latest_livekernel is not None else latest_n
+    mini_n = latest_minidump if latest_minidump is not None else latest_n
+
+    strict = strict_access or require_admin
+
     patterns = wer_patterns or WER_PATTERNS
-    wer_dirs = find_latest_dirs(WER_QUEUE, patterns, latest_n)
+    wer_dirs = find_latest_dirs(WER_QUEUE, patterns, latest_n, strict_access=strict)
     for d in wer_dirs:
         copy_dir_with_limit(
             d,
@@ -137,7 +190,9 @@ def collect(
         )
 
     for sub in LIVE_KERNEL_FOLDERS:
-        for f in find_latest_file_in_subdir(LIVE_KERNEL, sub, latest_n):
+        for f in find_latest_file_in_subdir(
+            LIVE_KERNEL, sub, live_n, strict_access=strict
+        ):
             dest = live_dest / sub / f.name
             copy_file_with_limit(
                 f,
@@ -147,7 +202,7 @@ def collect(
                 include_large_dumps=include_large_dumps,
             )
 
-    for f in find_latest_files(MINIDUMP, latest_n):
+    for f in find_latest_files(MINIDUMP, mini_n, strict_access=strict):
         dest = mini_dest / f.name
         copy_file_with_limit(
             f,
@@ -162,6 +217,8 @@ def collect(
     manifest = {
         "output_dir": str(output_dir),
         "latest_n": latest_n,
+        "latest_livekernel": live_n,
+        "latest_minidump": mini_n,
         "eventlog_hours": hours,
         "include_large_dumps": include_large_dumps,
         "max_dump_gb": max_dump_gb,
@@ -172,6 +229,7 @@ def collect(
     }
 
     manifest_path = output_dir / "manifest.json"
+    manifest["manifest_path"] = str(manifest_path)
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
     return manifest

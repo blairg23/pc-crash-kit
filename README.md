@@ -13,42 +13,94 @@ CLI choice: `argparse` keeps the runtime dependency set minimal and avoids extra
 ## Install
 1. `poetry install`
 
-## Usage
-Collect crash artifacts into `./artifacts/<timestamp>/`:
-```bash
-poetry run pc-crash-kit collect
+## Quick Start (Stupid Easy)
+1. Open **PowerShell** in the repo folder.
+2. Paste this (works even if Poetry is not installed):
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\pc-crash-kit.ps1 collect --require-admin --strict-access
+```
+If you are not admin, you will get a UAC prompt and it will re-run elevated.
+
+If the tool prints a "Run this in PS" block, **copy/paste exactly what it prints** into PowerShell.
+If you are in WSL or bash, open PowerShell in the repo and use the same command.
+
+If Poetry is installed, this also works:
+```powershell
+poetry run pc-crash-kit collect --require-admin --strict-access
+```
+
+## One-Command Full Run
+Collect, summarize, and doctor in one command:
+```powershell
+$c = poetry run pc-crash-kit collect --require-admin --strict-access --json | ConvertFrom-Json; poetry run pc-crash-kit summarize $c.output_dir; poetry run pc-crash-kit doctor
+```
+
+## Poetry Not Found (Fix Once)
+If PowerShell says "poetry is not recognized", run this in PowerShell:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\setup-poetry-path.ps1
+```
+
+To make it permanent for your user:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\setup-poetry-path.ps1 -Persist
+```
+
+If you still want to verify the location manually:
+```powershell
+Get-ChildItem -Path "$env:APPDATA","$env:LOCALAPPDATA" -Filter "poetry.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
 ```
 
 Collect more items and more logs:
-```bash
-poetry run pc-crash-kit collect --latest-n 5 --eventlog-hours 48
+```powershell
+poetry run pc-crash-kit collect --latest-n 5 --eventlog-hours 48 --require-admin --strict-access
+```
+
+Collect different counts for LiveKernelReports and minidumps:
+```powershell
+poetry run pc-crash-kit collect --latest-n 3 --latest-livekernel 5 --latest-minidump 2 --require-admin --strict-access
 ```
 
 Include large dumps (over 1 GB) and raise the size limit:
-```bash
-poetry run pc-crash-kit collect --include-large-dumps --max-dump-gb 2
+```powershell
+poetry run pc-crash-kit collect --include-large-dumps --max-dump-gb 2 --require-admin --strict-access
+```
+
+Emit machine-readable JSON for scripting:
+```powershell
+poetry run pc-crash-kit collect --json --require-admin --strict-access
 ```
 
 Override WER patterns (repeatable):
-```bash
-poetry run pc-crash-kit collect --wer-pattern Kernel_193_* --wer-pattern Kernel_15e_*
+```powershell
+poetry run pc-crash-kit collect --wer-pattern Kernel_193_* --wer-pattern Kernel_15e_* --require-admin --strict-access
 ```
 
 Summarize a collected bundle:
-```bash
-poetry run pc-crash-kit summarize artifacts/20250205-120000
+```powershell
+poetry run pc-crash-kit summarize artifacts\20250205-120000
 ```
 
 Run doctor checks:
-```bash
+```powershell
 poetry run pc-crash-kit doctor
 poetry run pc-crash-kit doctor --run-sfc --dism-scan
 ```
 
 ## Notes
-- Some paths and event log exports require admin. If you are not admin, the tool will warn and skip what it cannot read.
+- Full access requires admin. Use `--require-admin --strict-access` for fail-fast behavior.
 - Dumps larger than 1 GB are skipped by default. Skipped files are listed in `manifest.json` under `copy_report.skipped_large`.
 - Windows commands used: `wevtutil`, `wmic`, `systeminfo`, `sfc`, `DISM`.
+- `summarize` will parse `sysinfo.txt` and `memory.csv` if present in the bundle.
+
+## PowerShell Helper
+The helper script auto-elevates and uses Poetry if available, otherwise falls back to Python.
+
+```powershell
+.\scripts\pc-crash-kit.ps1 collect --require-admin --strict-access
+```
+
+If you want it available globally, add the `scripts/` folder to your PATH or create a PowerShell profile alias.
 
 ## Sample summarize output
 
