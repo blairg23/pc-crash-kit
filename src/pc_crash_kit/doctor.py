@@ -11,9 +11,7 @@ logger = logging.getLogger(__name__)
 
 def _run_doctor_script(
     output_dir: Path,
-    run_sfc: bool,
-    dism_scan: bool,
-    dism_restore: bool,
+    checks: dict[str, bool],
 ) -> dict:
     script = Path(__file__).resolve().parents[2] / "scripts" / "doctor-checks.ps1"
     cmd = [
@@ -26,11 +24,25 @@ def _run_doctor_script(
         "-OutputDir",
         str(output_dir),
     ]
-    if run_sfc:
+    if checks.get("systeminfo"):
+        cmd.append("-SystemInfo")
+    if checks.get("system_info"):
+        cmd.append("-SystemSnapshot")
+    if checks.get("dxdiag"):
+        cmd.append("-DxDiag")
+    if checks.get("msinfo"):
+        cmd.append("-MsInfo")
+    if checks.get("drivers"):
+        cmd.append("-Drivers")
+    if checks.get("hotfixes"):
+        cmd.append("-Hotfixes")
+    if checks.get("crash_config"):
+        cmd.append("-CrashConfig")
+    if checks.get("sfc"):
         cmd.append("-RunSfc")
-    if dism_scan:
+    if checks.get("dism_scan"):
         cmd.append("-DismScan")
-    if dism_restore:
+    if checks.get("dism_restore"):
         cmd.append("-DismRestore")
 
     result = run_cmd(cmd, capture=True, check=False)
@@ -65,9 +77,7 @@ def _run_doctor_script(
 
 def doctor(
     output_dir: Path | None,
-    run_sfc: bool = False,
-    dism_scan: bool = False,
-    dism_restore: bool = False,
+    checks: dict[str, bool],
 ) -> dict:
     if output_dir is None:
         output_dir = Path("artifacts") / f"doctor-{timestamp_now()}"
@@ -82,9 +92,13 @@ def doctor(
         }
         return result
 
-    result = _run_doctor_script(output_dir, run_sfc, dism_scan, dism_restore)
+    result = _run_doctor_script(output_dir, checks)
     if "output_dir" not in result:
         result["output_dir"] = str(output_dir)
+    result.setdefault(
+        "requested_checks",
+        [name for name, enabled in checks.items() if enabled],
+    )
 
     (output_dir / "doctor_manifest.json").write_text(
         json.dumps(result, indent=2), encoding="utf-8"

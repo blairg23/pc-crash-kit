@@ -11,7 +11,46 @@ from typing import Sequence
 from .collect import collect
 from .doctor import doctor
 from .summarize import summarize
-from .utils import is_admin, is_wsl, wsl_to_windows_path, run_cmd
+from .utils import is_admin, is_wsl, load_config, wsl_to_windows_path, run_cmd
+
+DEFAULT_DOCTOR_CHECKS = {
+    "systeminfo": True,
+    "system_info": True,
+    "dxdiag": False,
+    "msinfo": False,
+    "drivers": False,
+    "hotfixes": False,
+    "crash_config": False,
+    "sfc": False,
+    "dism_scan": False,
+    "dism_restore": False,
+}
+
+MINIMAL_DOCTOR_CHECKS = {
+    "systeminfo": True,
+    "system_info": True,
+    "dxdiag": False,
+    "msinfo": False,
+    "drivers": False,
+    "hotfixes": False,
+    "crash_config": False,
+    "sfc": False,
+    "dism_scan": False,
+    "dism_restore": False,
+}
+
+FULL_DOCTOR_CHECKS = {
+    "systeminfo": True,
+    "system_info": True,
+    "dxdiag": True,
+    "msinfo": True,
+    "drivers": True,
+    "hotfixes": True,
+    "crash_config": True,
+    "sfc": True,
+    "dism_scan": True,
+    "dism_restore": True,
+}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -120,6 +159,47 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output directory for doctor results (default: ./artifacts/doctor-<timestamp>/)",
     )
     doctor_p.add_argument(
+        "--config",
+        type=Path,
+        default=None,
+        help="Path to pc-crash-kit.toml (default: auto-detect)",
+    )
+    doctor_p.add_argument(
+        "--full",
+        action="store_true",
+        help="Run the full diagnostics set (overrides config)",
+    )
+    doctor_p.add_argument(
+        "--minimal",
+        action="store_true",
+        help="Run the minimal diagnostics set (overrides config)",
+    )
+    doctor_p.add_argument(
+        "--dxdiag",
+        action="store_true",
+        help="Run dxdiag and save output",
+    )
+    doctor_p.add_argument(
+        "--msinfo",
+        action="store_true",
+        help="Run msinfo32 and save output",
+    )
+    doctor_p.add_argument(
+        "--drivers",
+        action="store_true",
+        help="Capture driver inventory (driverquery)",
+    )
+    doctor_p.add_argument(
+        "--hotfixes",
+        action="store_true",
+        help="Capture installed hotfixes",
+    )
+    doctor_p.add_argument(
+        "--crash-config",
+        action="store_true",
+        help="Capture CrashControl registry settings",
+    )
+    doctor_p.add_argument(
         "--run-sfc",
         action="store_true",
         help="Run sfc /scannow (slow, requires admin)",
@@ -145,6 +225,17 @@ def _configure_logging(verbose: bool) -> None:
 
 def _ps_quote(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
+
+
+def _doctor_checks_from_config(config: dict) -> dict[str, bool]:
+    checks = dict(DEFAULT_DOCTOR_CHECKS)
+    cfg_doctor = config.get("doctor", {})
+    if isinstance(cfg_doctor, dict):
+        for key in checks:
+            value = cfg_doctor.get(key)
+            if isinstance(value, bool):
+                checks[key] = value
+    return checks
 
 
 def _convert_wsl_args(argv: Sequence[str]) -> list[str]:
@@ -425,11 +516,39 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "doctor":
+        if args.full and args.minimal:
+            print("Choose only one of --full or --minimal.", file=sys.stderr)
+            return 2
+        config, _ = load_config(args.config)
+        checks = _doctor_checks_from_config(config)
+        if args.full:
+            checks = dict(FULL_DOCTOR_CHECKS)
+        if args.minimal:
+            checks = dict(MINIMAL_DOCTOR_CHECKS)
+
+        if args.dxdiag:
+            checks["dxdiag"] = True
+        if args.msinfo:
+            checks["msinfo"] = True
+        if args.drivers:
+            checks["drivers"] = True
+        if args.hotfixes:
+            checks["hotfixes"] = True
+        if args.crash_config:
+            checks["crash_config"] = True
+        if args.run_sfc:
+            checks["sfc"] = True
+        if args.dism_scan:
+            checks["dism_scan"] = True
+        if args.dism_restore:
+            checks["dism_restore"] = True
+
+        output_dir = args.output
+        if output_dir is None:
+            output_dir = _latest_bundle_dir(Path("artifacts"))
         result = doctor(
-            output_dir=args.output,
-            run_sfc=args.run_sfc,
-            dism_scan=args.dism_scan,
-            dism_restore=args.dism_restore,
+            output_dir=output_dir,
+            checks=checks,
         )
         print("Doctor results written")
         print(f"Output: {result['output_dir']}")

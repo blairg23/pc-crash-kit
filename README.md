@@ -46,7 +46,7 @@ $c = poetry run pc-crash-kit collect --require-admin --strict-access --json | Co
 ## What Each Command Does
 - `collect`: Copies WER ReportQueue, LiveKernelReports, minidumps, and exports System/Application event logs into `artifacts/<timestamp>/`. Writes `manifest.json` with what was copied or skipped.
 - `summarize`: Parses `Report.wer` files, clusters signatures, and produces `summary.json` + `summary.txt`. Also includes `system_info` (OS/GPU/BIOS/CPU) from PowerShell `Get-CimInstance`. Defaults to the latest bundle under `./artifacts`.
-- `doctor`: Runs system diagnostics and saves output to `artifacts/doctor-<timestamp>/`. Always captures `systeminfo.txt` and `system_info.json`, and optionally runs `sfc`/`DISM` when you pass flags and are admin.
+- `doctor`: Runs system diagnostics and saves output to the latest bundle under `./artifacts` (if present), otherwise `artifacts/doctor-<timestamp>/`. Uses config defaults, or `--full`/`--minimal` to override, plus per-check flags for extra data.
 
 ## Poetry Not Found (Fix Once)
 If PowerShell says "poetry is not recognized", run this in PowerShell:
@@ -82,9 +82,6 @@ patterns = ["Kernel_193_*", "Kernel_15e_*", "Kernel_1a8_*"]
 folders = ["WATCHDOG", "NDIS", "USBXHCI", "USBHUB3", "PoW32kWatchdog"]
 
 [custom.arc_raiders]
-files = [
-  "%LOCALAPPDATA%\\PioneerGame\\Saved\\PioneerGame_PCD3D_SM5.upipelinecache"
-]
 dirs = [
   "%LOCALAPPDATA%\\PioneerGame\\Saved\\Crashes",
   "%LOCALAPPDATA%\\PioneerGame\\Saved\\Config"
@@ -92,7 +89,21 @@ dirs = [
 globs = [
   "%TEMP%\\**\\*.dmp"
 ]
+
+[doctor]
+systeminfo = true
+system_info = true
+dxdiag = false
+msinfo = false
+drivers = false
+hotfixes = false
+crash_config = false
+sfc = false
+dism_scan = false
+dism_restore = false
 ```
+
+Doctor reads `[doctor]` from the same config file. You can also pass `--config` to `pc-crash-kit doctor`.
 
 You can also point to a config file explicitly:
 ```powershell
@@ -138,6 +149,17 @@ Run doctor checks:
 ```powershell
 poetry run pc-crash-kit doctor
 poetry run pc-crash-kit doctor --run-sfc --dism-scan
+```
+
+Full and minimal doctor presets:
+```powershell
+poetry run pc-crash-kit doctor --full
+poetry run pc-crash-kit doctor --minimal
+```
+
+Enable extra doctor checks explicitly:
+```powershell
+poetry run pc-crash-kit doctor --dxdiag --drivers --hotfixes
 ```
 
 ## Notes
