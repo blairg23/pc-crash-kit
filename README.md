@@ -14,26 +14,39 @@ CLI choice: `argparse` keeps the runtime dependency set minimal and avoids extra
 1. `poetry install`
 
 ## Quick Start (Stupid Easy)
-1. Open **PowerShell** in the repo folder.
-2. Paste this (works even if Poetry is not installed):
+Use the same command everywhere once you add `scripts/` to PATH.
+
+### 1) One-Time Setup (adds `scripts/` to PATH)
+PowerShell:
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\pc-crash-kit.ps1 collect --require-admin --strict-access
+[Environment]::SetEnvironmentVariable("PATH", "D:\\Dropbox\\Projects\\sandboxes\\python\\pc-crash-kit\\scripts;" + [Environment]::GetEnvironmentVariable("PATH","User"), "User")
 ```
+
+WSL bash:
+```bash
+echo 'export PATH="/mnt/d/Dropbox/Projects/sandboxes/python/pc-crash-kit/scripts:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+### 2) Run (same command in any terminal)
+```bash
+pc-crash-kit collect --require-admin --strict-access
+```
+
 If you are not admin, you will get a UAC prompt and it will re-run elevated.
 
 If the tool prints a "Run this in PS" block, **copy/paste exactly what it prints** into PowerShell.
-If you are in WSL or bash, open PowerShell in the repo and use the same command.
-
-If Poetry is installed, this also works:
-```powershell
-poetry run pc-crash-kit collect --require-admin --strict-access
-```
 
 ## One-Command Full Run
 Collect, summarize, and doctor in one command:
 ```powershell
 $c = poetry run pc-crash-kit collect --require-admin --strict-access --json | ConvertFrom-Json; poetry run pc-crash-kit summarize $c.output_dir; poetry run pc-crash-kit doctor
 ```
+
+## What Each Command Does
+- `collect`: Copies WER ReportQueue, LiveKernelReports, minidumps, and exports System/Application event logs into `artifacts/<timestamp>/`. Writes `manifest.json` with what was copied or skipped.
+- `summarize`: Parses `Report.wer` files, clusters signatures, and produces `summary.json` + `summary.txt`. Also includes `system_info` (OS/GPU/BIOS/CPU) from PowerShell `Get-CimInstance`. Defaults to the latest bundle under `./artifacts`.
+- `doctor`: Runs system diagnostics and saves output to `artifacts/doctor-<timestamp>/`. Always captures `systeminfo.txt` and `system_info.json`, and optionally runs `sfc`/`DISM` when you pass flags and are admin.
 
 ## Poetry Not Found (Fix Once)
 If PowerShell says "poetry is not recognized", run this in PowerShell:
@@ -53,6 +66,7 @@ Get-ChildItem -Path "$env:APPDATA","$env:LOCALAPPDATA" -Filter "poetry.exe" -Rec
 
 ## Config File (Custom Paths)
 Create `pc-crash-kit.toml` in the repo root to override default locations and include custom game dumps.
+Custom groups live under `[custom.<group_name>]` and are copied into `artifacts/custom/<group_name>/`.
 
 Example:
 ```toml
@@ -67,15 +81,16 @@ patterns = ["Kernel_193_*", "Kernel_15e_*", "Kernel_1a8_*"]
 [livekernel]
 folders = ["WATCHDOG", "NDIS", "USBXHCI", "USBHUB3", "PoW32kWatchdog"]
 
-[custom]
+[custom.arc_raiders]
 files = [
-  "C:\\Games\\ARC Raiders\\Saved\\Logs\\CrashReportClient.ini"
+  "%LOCALAPPDATA%\\PioneerGame\\Saved\\PioneerGame_PCD3D_SM5.upipelinecache"
 ]
 dirs = [
-  "C:\\Games\\ARC Raiders\\Saved\\Crashes"
+  "%LOCALAPPDATA%\\PioneerGame\\Saved\\Crashes",
+  "%LOCALAPPDATA%\\PioneerGame\\Saved\\Config"
 ]
 globs = [
-  "C:\\Games\\ARC Raiders\\Saved\\Crashes\\**\\*.dmp"
+  "%TEMP%\\**\\*.dmp"
 ]
 ```
 
@@ -109,7 +124,12 @@ Override WER patterns (repeatable):
 poetry run pc-crash-kit collect --wer-pattern Kernel_193_* --wer-pattern Kernel_15e_* --require-admin --strict-access
 ```
 
-Summarize a collected bundle:
+Summarize the latest collected bundle (default):
+```powershell
+poetry run pc-crash-kit summarize
+```
+
+Summarize a specific bundle:
 ```powershell
 poetry run pc-crash-kit summarize artifacts\20250205-120000
 ```
@@ -123,8 +143,8 @@ poetry run pc-crash-kit doctor --run-sfc --dism-scan
 ## Notes
 - Full access requires admin. Use `--require-admin --strict-access` for fail-fast behavior.
 - Dumps larger than 1 GB are skipped by default. Skipped files are listed in `manifest.json` under `copy_report.skipped_large`.
-- Windows commands used: `wevtutil`, `wmic`, `systeminfo`, `sfc`, `DISM`.
-- `summarize` will parse `sysinfo.txt` and `memory.csv` if present in the bundle.
+- Windows commands used: `wevtutil`, `systeminfo`, PowerShell `Get-CimInstance`, `sfc`, `DISM`.
+- `summarize` will parse `sysinfo.txt` and `memory.csv` if present in the bundle, and will include `system_info` output from PowerShell if available.
 
 ## PowerShell Helper
 The helper script auto-elevates and uses Poetry if available, otherwise falls back to Python.
@@ -132,8 +152,6 @@ The helper script auto-elevates and uses Poetry if available, otherwise falls ba
 ```powershell
 .\scripts\pc-crash-kit.ps1 collect --require-admin --strict-access
 ```
-
-If you want it available globally, add the `scripts/` folder to your PATH or create a PowerShell profile alias.
 
 ## Sample summarize output
 

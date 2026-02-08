@@ -1,0 +1,19 @@
+[paths]
+wer_queue = "C:\\ProgramData\\Microsoft\\Windows\\WER\\ReportQueue"
+livekernel_reports = "C:\\Windows\\LiveKernelReports"
+minidump = "C:\\Windows\\Minidump"
+
+[wer]
+patterns = ["Kernel_193_*", "Kernel_15e_*", "Kernel_1a8_*"]
+
+[livekernel]
+folders = ["WATCHDOG", "NDIS", "USBXHCI", "USBHUB3", "PoW32kWatchdog"]
+
+[custom.arc_raiders]
+dirs = [
+  "%LOCALAPPDATA%\\PioneerGame\\Saved\\Crashes",
+  "%LOCALAPPDATA%\\PioneerGame\\Saved\\Config"
+]
+globs = [
+  "%TEMP%\\**\\*.dmp"
+]

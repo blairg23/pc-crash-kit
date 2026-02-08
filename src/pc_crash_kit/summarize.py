@@ -22,47 +22,45 @@ def _read_text_guess(path: Path) -> str:
     return ""
 
 
-def _parse_wmic_list(text: str) -> list[dict[str, str]]:
-    items: list[dict[str, str]] = []
-    current: dict[str, str] = {}
-    for line in text.splitlines():
-        line = line.strip()
-        if not line:
-            if current:
-                items.append(current)
-                current = {}
-            continue
-        if "=" in line:
-            k, v = line.split("=", 1)
-            current[k.strip()] = v.strip()
-    if current:
-        items.append(current)
-    return items
-
-
-def _wmic(query: list[str]) -> list[dict[str, str]]:
-    if not is_windows():
-        return []
-    result = run_cmd(["wmic", *query, "/format:list"], capture=True, check=False)
-    if result.returncode != 0:
-        logger.warning("WMIC failed: %s", result.stderr.strip())
-        return []
-    return _parse_wmic_list(result.stdout)
-
-
-def get_gpu_info() -> list[dict[str, str]]:
-    return _wmic(["path", "Win32_VideoController", "get", "Name,DriverVersion,DriverDate"])
-
-
-def get_os_info() -> dict[str, str]:
+def _load_system_info() -> dict[str, Any]:
     if not is_windows():
         return {
-            "platform": platform.platform(),
-            "release": platform.release(),
-            "version": platform.version(),
+            "error": "Not running on Windows. Run summarize on Windows PowerShell for system info.",
+            "os": {
+                "platform": platform.platform(),
+                "release": platform.release(),
+                "version": platform.version(),
+            },
+            "gpu": [],
         }
-    items = _wmic(["os", "get", "Caption,Version,BuildNumber"])
-    return items[0] if items else {}
+
+    script = Path(__file__).resolve().parents[2] / "scripts" / "system-info.ps1"
+    if not script.exists():
+        msg = f"System info script not found: {script}"
+        logger.warning(msg)
+        return {"error": msg, "os": {}, "gpu": []}
+
+    cmd = [
+        "powershell.exe",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(script),
+    ]
+    result = run_cmd(cmd, capture=True, check=False)
+    raw = (result.stdout or "").strip()
+    if not raw:
+        msg = "System info script returned no output."
+        logger.warning("%s stderr=%s", msg, (result.stderr or "").strip())
+        return {"error": msg, "stderr": (result.stderr or "").strip(), "os": {}, "gpu": []}
+
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        msg = "Failed to parse system info JSON."
+        logger.warning("%s output=%s", msg, raw[:200])
+        return {"error": msg, "raw": raw[:500], "stderr": (result.stderr or "").strip(), "os": {}, "gpu": []}
 
 
 def _find_latest_named_file(base: Path, filename: str) -> Path | None:
@@ -265,6 +263,20 @@ def summarize(bundle_dir: Path, output_dir: Path | None = None) -> dict[str, str
         except Exception:
             manifest = None
 
+    system_info = _load_system_info()
+    gpu_info: list[dict[str, Any]] = []
+    os_info: dict[str, Any] = {}
+    if isinstance(system_info, dict):
+        raw_gpu = system_info.get("gpu") or []
+        if isinstance(raw_gpu, dict):
+            gpu_info = [raw_gpu]
+        elif isinstance(raw_gpu, list):
+            gpu_info = raw_gpu
+        else:
+            gpu_info = []
+        raw_os = system_info.get("os") or {}
+        os_info = raw_os if isinstance(raw_os, dict) else {}
+
     summary = {
         "generated_at": timestamp_now(),
         "bundle_dir": str(bundle_dir),
@@ -272,8 +284,9 @@ def summarize(bundle_dir: Path, output_dir: Path | None = None) -> dict[str, str
         "report_count": len(reports),
         "signature_counts": signature_list,
         "reports": reports,
-        "gpu": get_gpu_info(),
-        "os": get_os_info(),
+        "system_info": system_info,
+        "gpu": gpu_info,
+        "os": os_info,
         "sysinfo": _load_sysinfo(bundle_dir),
         "memory_csv": _load_memory_csv(bundle_dir),
         "manifest": manifest,

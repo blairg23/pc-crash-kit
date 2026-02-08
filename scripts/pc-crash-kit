@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v powershell.exe >/dev/null 2>&1; then
+  echo "powershell.exe not found. This script must be run from WSL with Windows integration enabled." >&2
+  exit 127
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WIN_SCRIPT="$(wslpath -w "${SCRIPT_DIR}/pc-crash-kit.ps1")"
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${WIN_SCRIPT}" "$@"
