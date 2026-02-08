@@ -361,9 +361,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     _configure_logging(args.verbose)
 
     if is_wsl():
-        if args.command in {"collect", "doctor"}:
-            _print_wsl_instructions(argv)
-            return 2
+        if args.command == "collect" and (args.require_admin or args.strict_access):
+            return _launch_elevated_from_wsl(argv)
         return _delegate_to_windows(argv)
 
     if args.command == "collect" and (args.require_admin or args.strict_access) and not is_admin():
