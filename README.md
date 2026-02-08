@@ -43,6 +43,11 @@ Collect, summarize, and doctor in one command:
 $c = poetry run pc-crash-kit collect --require-admin --strict-access --json | ConvertFrom-Json; poetry run pc-crash-kit summarize $c.output_dir; poetry run pc-crash-kit doctor
 ```
 
+## What Each Command Does
+- `collect`: Copies WER ReportQueue, LiveKernelReports, minidumps, and exports System/Application event logs into `artifacts/<timestamp>/`. Writes `manifest.json` with what was copied or skipped.
+- `summarize`: Parses `Report.wer` files, clusters signatures, and produces `summary.json` + `summary.txt`. Also includes `system_info` (OS/GPU/BIOS/CPU) from PowerShell `Get-CimInstance`. Defaults to the latest bundle under `./artifacts`.
+- `doctor`: Runs system diagnostics and saves output to `artifacts/doctor-<timestamp>/`. Always captures `systeminfo.txt` and `system_info.json`, and optionally runs `sfc`/`DISM` when you pass flags and are admin.
+
 ## Poetry Not Found (Fix Once)
 If PowerShell says "poetry is not recognized", run this in PowerShell:
 ```powershell
@@ -78,16 +83,14 @@ folders = ["WATCHDOG", "NDIS", "USBXHCI", "USBHUB3", "PoW32kWatchdog"]
 
 [custom.arc_raiders]
 files = [
-  "C:\\Games\\ARC Raiders\\Saved\\Logs\\CrashReportClient.ini"
+  "%LOCALAPPDATA%\\PioneerGame\\Saved\\PioneerGame_PCD3D_SM5.upipelinecache"
 ]
 dirs = [
-  "C:\\Games\\ARC Raiders\\Saved\\Crashes",
-  "C:\\Games\\ARC Raiders\\Saved\\CrashReportClient",
-  "C:\\Games\\ARC Raiders\\Saved\\WindowsClient",
-  "C:\\Games\\ARC Raiders\\Saved\\Config"
+  "%LOCALAPPDATA%\\PioneerGame\\Saved\\Crashes",
+  "%LOCALAPPDATA%\\PioneerGame\\Saved\\Config"
 ]
 globs = [
-  "C:\\Games\\ARC Raiders\\Saved\\Crashes\\**\\*.dmp"
+  "%TEMP%\\**\\*.dmp"
 ]
 ```
 
@@ -141,7 +144,7 @@ poetry run pc-crash-kit doctor --run-sfc --dism-scan
 - Full access requires admin. Use `--require-admin --strict-access` for fail-fast behavior.
 - Dumps larger than 1 GB are skipped by default. Skipped files are listed in `manifest.json` under `copy_report.skipped_large`.
 - Windows commands used: `wevtutil`, `systeminfo`, PowerShell `Get-CimInstance`, `sfc`, `DISM`.
-- `summarize` will parse `sysinfo.txt` and `memory.csv` if present in the bundle.
+- `summarize` will parse `sysinfo.txt` and `memory.csv` if present in the bundle, and will include `system_info` output from PowerShell if available.
 
 ## PowerShell Helper
 The helper script auto-elevates and uses Poetry if available, otherwise falls back to Python.
