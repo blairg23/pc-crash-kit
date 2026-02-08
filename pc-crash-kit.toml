@@ -17,3 +17,15 @@ dirs = [
 globs = [
   "%TEMP%\\**\\*.dmp"
 ]
+
+[doctor]
+systeminfo = true
+system_info = true
+dxdiag = false
+msinfo = false
+drivers = false
+hotfixes = false
+crash_config = false
+sfc = false
+dism_scan = false
+dism_restore = false
